@@ -28,5 +28,5 @@ EXPOSE 8080
 ENTRYPOINT ["python", "-u", "./abtorrents-proxy.py"]
 
 # Local build
-# docker build -t captmicr0/abtorrents-proxy:1.2.0 .
-# docker run captmicr0/abtorrents-proxy:1.2.0
+# docker build -t captmicr0/abtorrents-proxy:1.3.0 .
+# docker run captmicr0/abtorrents-proxy:1.3.0
