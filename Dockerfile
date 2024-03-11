@@ -27,6 +27,8 @@ EXPOSE 8080
 
 ENTRYPOINT ["python", "-u", "./abtorrents-proxy.py"]
 
+LABEL org.opencontainers.image.source=https://github.com/captmicr0/abtorrents-proxy
+
 # Local build
 # docker build -t captmicr0/abtorrents-proxy:1.3.0 .
 # docker run captmicr0/abtorrents-proxy:1.3.0
