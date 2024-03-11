@@ -28,7 +28,7 @@ class ABTorrents:
         self.chrome_options.add_argument('--no-zygote')
         self.chrome_options.add_argument('--disable-dev-shm-usage')
         self.chrome_options.add_argument("--window-size=1920,1080")
-
+        self.chrome_options.add_argument('log-level=3')
 
         # Open browser
         self.webdriver = webdrv.Chrome(options=self.chrome_options)
@@ -110,13 +110,14 @@ class ABTorrents:
         raise Exception("No match found!")
     
     def doLogin(self, username, password):
+        print(f"[ABTorrents] doLogin {username}")
         # Go to login page if not already on it
         if not self.webdriver.current_url.endswith("login.php"):
             print("[ABTorrents] not on login page, forcing going to /login.php...")
             self.webdriver.get(urljoin(self.baseUrl, "/login.php"))
         
         # Make sure it actually the login page and not redirected to homepage
-        if not self.webdriver.current_url.endswith("login.php"):
+        if not "login.php" in self.webdriver.current_url:
             print("[ABTorrents] still not on login page")
             if self.webdriver.current_url.endswith("index.php"):
                 print("[ABTorrents] redirected to index.php, must be logged in already")
@@ -168,39 +169,51 @@ class ABTorrents:
         # Click the correct captcha icon
         captchaToClick.click()
 
-        # Wait a second...
-        self.webdriver.save_screenshot('login-before-submit.png')
-
         # Find the X and click to login
+        currURL = self.webdriver.current_url
         submit = self.webdriver.find_element(By.CSS_SELECTOR, "input[type='submit'][value='X']")
         submit.click()
 
-        # Wait a second...
-        self.webdriver.save_screenshot('login-after-submit.png')
+        print("[ABTorrents] submitted form, waiting for url to change...")
 
-        if "login.php" in self.webdriver.current_url:
-            print("[ABTorrents] login failed")
+        try:
+            self.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "a[href*='logout.php']"))
+            )
+        except (NoSuchElementException, TimeoutException) as e:
+            print(f"[ABTorrents] login failed: {e}")
             return 0
 
         print("[ABTorrents] login successful")
+        
+        # Save cookies
         self.saveCookies()
 
         # Check for PMs
         self.checkPMs()
-        
+
         return 1
     
     def doLogout(self):
-        # Wait for logout button to exist and click it
-        logoutLink = self.wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "a[href*='logout.php']"))
-        )
-        logoutLink.click()
+        try:
+            # Wait for logout button to exist and click it
+            logoutLink = self.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "a[href*='logout.php']"))
+            )
+            logoutLink.click()
+        except (NoSuchElementException, TimeoutException) as e:
+            print("[ABTorrents] logout failed: {e}")
 
     def getPageSource(self, path):
         # Create return variables
         repsonseHTML = "Error fetching page source"
         responseCode = 500
+
+        # Do nothing if on the login page
+        if "login.php" in self.webdriver.current_url:
+            responseHTML="redirected to login.php, you need to login first"
+            print(f"[ABTorrents] {responseHTML}")
+            return responseCode, responseHTML
 
         # Join the baseUrl and requested path 
         reqUrl = urljoin(self.baseUrl, path)
@@ -307,10 +320,11 @@ class ABTorrents:
         # Exit browser
         self.webdriver.quit()
 
+
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.client import HTTPConnection
-from urllib.parse import urljoin, urlsplit
-import cgi
+import socket, select, ssl
+from urllib.parse import urljoin, urlsplit, urlparse, parse_qs
 
 # This class acts as an HTTP server that forwards requests to the ABTorrents selenium browser instance.
 # It make the cardigan custom definition able to handle logins and search ABTorrents via the selenium instance
@@ -323,66 +337,100 @@ class ABTProwlarrHandler(BaseHTTPRequestHandler):
     
     def log_message(self, format, *args):
         return
-
+    
     # Process GET requests
     def do_GET(self):
-        validPages = ["index.php", "browse.php", "pm_system.php"]
+        validPages = ["index.php", "browse.php", "pm_system.php", 'doLogin.py']
         if any(page in self.path for page in validPages):
             print(f"[ABTProwlarrHandler] requesting url: {self.path}")
-            responseCode, responseHTML = self.abt.getPageSource(self.path)
-            self.send_response(responseCode)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-            self.wfile.write(bytes(responseHTML, "utf-8"))
-        elif self.path == "/doLogin.py":
-            print(f"[ABTProwlarrHandler] requesting login form: {self.path}")
-            self.send_response(200)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-            response  = "<html><head><title>abtorrents-proxy</title></head><body>"
-            response += "<form action='/doLogin.py' method='post'>"
-            response += "<label for='username'>Username:</label>"
-            response += "<input type='text' id='username' name='username' placeholder='username'/>"
-            response += "<label for='password'>Password:</label>"
-            response += "<input type='password' id='password' name='password' placeholder='password'/>"
-            response += "<input type='submit' id='submit' name='submit' value='Submit'/>"
-            response += "</form>"
-            response += "</body></html>"
-            self.wfile.write(bytes(response, "utf-8"))
+            if "doLogin.py" in self.path:
+                # Handle login
+                response  = "<html><head><title>abtorrents-proxy</title></head><body>"
+                if "doLogin.py?" not in self.path:
+                    print(f"[ABTProwlarrHandler] requesting login form: {self.path}")
+                    response += "<form action='/doLogin.py' method='post'>"
+                    response += "<label for='username'>Username:</label>"
+                    response += "<input type='text' id='username' name='username' placeholder='username'/>"
+                    response += "<label for='password'>Password:</label>"
+                    response += "<input type='password' id='password' name='password' placeholder='password'/>"
+                    response += "<input type='submit' id='submit' name='submit' value='Submit'/>"
+                    response += "</form>"
+                else:
+                    print(f"[ABTProwlarrHandler] attempting login: {self.path}")
+                    try:
+                        parsed = urlparse(self.path)
+                        params = parse_qs(parsed.query)
+                        if all(key in params for key in ['username','password']):
+                            print(f"params: {params}")
+                            # Try to login
+                            if self.abt.doLogin(params["username"], params["password"]):
+                                response += "<span id='login_success'>login success</span>"
+                            else:
+                                response += "<span id='login_failed'>login failed</span>"
+                        else:
+                            # Raise exception if content_length is 0
+                            raise Exception
+                    except:
+                        response += "<span id='login_failed'>login exception</span>"
+                # Send response
+                response += "</body></html>"
+                self.send_response(200)
+                self.send_header("Content-type","text/html")
+                self.end_headers()
+                self.wfile.write(bytes(response, "utf-8"))
+            else:
+                # Get page source from selenium browser
+                responseCode, responseHTML = self.abt.getPageSource(self.path)
+                self.send_response(responseCode)
+                self.send_header("Content-type", "text/html")
+                self.end_headers()
+                self.wfile.write(bytes(responseHTML, "utf-8"))
         else:
+            print(f"[ABTProwlarrHandler] requested INVALID page: {self.path}")
             self.send_response(500)
             self.send_header("Content-type", "text/html")
             self.end_headers()
-            self.wfile.write(bytes("Requested invalid page", "utf-8"))
+            self.wfile.write(bytes("requested invalid page", "utf-8"))
 
     # Process POST requests to /doLogin.py
     def do_POST(self):
+        # Handle login (for some reason POST login does not work... hangs on self.rfile.read, so using GET for now
+        """
         if self.path == "/doLogin.py":
             print(f"[ABTProwlarrHandler] attempting login: {self.path}")
-            self.send_response(200)
-            self.send_header("Content-type","text/html")
-            self.end_headers()
             response  = "<html><head><title>abtorrents-proxy</title></head><body>"
             try:
-                # Parse the form data
-                form = cgi.FieldStorage(
-                    fp=self.rfile,
-                    headers=self.headers,
-                    environ={"REQUEST_METHOD": "POST",
-                            "CONTENT_TYPE": self.headers["Content-Type"]}
-                )
-                # Get the username and password values
-                username = form.getvalue("username")
-                password = form.getvalue("password")
-                # Try to login
-                if self.abt.doLogin(username, password):
-                    response += "<span id='login_success'>login success</span>"
+                # Check if there is any form data
+                content_length = int(self.headers["Content-Length"])
+                if content_length:
+                    # Parse the form data
+                    content = self.rfile.read(content_length).decode("utf-8")
+                    form = parse_qs(content)
+                    # Get the username and password values
+                    username = form.getvalue("username")
+                    password = form.getvalue("password")
+                    # Try to login
+                    if self.abt.doLogin(username, password):
+                        response += "<span id='login_success'>login success</span>"
+                    else:
+                        response += "<span id='login_failed'>login failed</span>"
                 else:
-                    response += "<span id='login_failed'>login failed</span>"
+                    # Raise exception if content_length is 0
+                    raise Exception
             except:
                 response += "<span id='login_failed'>login exception</span>"
             response += "</body></html>"
+            self.send_response(200)
+            self.send_header("Content-type", "text/html")
+            self.end_headers()
             self.wfile.write(bytes(response, "utf-8"))
+        else:
+            print(f"[ABTProwlarrHandler] requested INVALID page: {self.path}")
+            self.send_response(500)
+            self.send_header("Content-type", "text/html")
+            self.end_headers()
+            self.wfile.write(bytes("requested invalid page", "utf-8"))
+        """
 
 # This class acts as an HTTP proxy that overwrites specific webserver addresses and ports.
 # This is so the cardigan custom definition doesn't require changing the URL for different ctonainer hostnames.
@@ -404,8 +452,34 @@ class OverwriteProxyHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         self.proxy_request('POST')
 
+    # Process CONNECT requests
     def do_CONNECT(self):
-        self.proxy_request('CONNECT')
+        self.connect_relay()
+    
+    def connect_relay(self):
+        address = self.path.split(':', 1)
+        address[1] = int(address[1]) or 443
+        try:
+            s = socket.create_connection(address, timeout=self.timeout)
+        except Exception as e:
+            self.send_error(502)
+            return
+        self.send_response(200, 'Connection Established')
+        self.end_headers()
+
+        conns = [self.connection, s]
+        self.close_connection = 0
+        while not self.close_connection:
+            rlist, wlist, xlist = select.select(conns, [], conns, self.timeout)
+            if xlist or not rlist:
+                break
+            for r in rlist:
+                other = conns[1] if r is conns[0] else conns[0]
+                data = r.recv(8192)
+                if not data:
+                    self.close_connection = 1
+                    break
+                other.sendall(data)
 
     def proxy_request(self, method):
         try:
