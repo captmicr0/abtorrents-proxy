@@ -110,11 +110,8 @@ class ABTorrents:
         raise Exception("No match found!")
     
     def doLogin(self, username, password):
-        print(f"[ABTorrents] doLogin {username}")
-        # Go to login page if not already on it
-        if not self.webdriver.current_url.endswith("login.php"):
-            print("[ABTorrents] not on login page, forcing going to /login.php...")
-            self.webdriver.get(urljoin(self.baseUrl, "/login.php"))
+        # Go to login page
+        self.webdriver.get(urljoin(self.baseUrl, "/login.php"))
         
         # Make sure it actually the login page and not redirected to homepage
         if not "login.php" in self.webdriver.current_url:
@@ -174,7 +171,7 @@ class ABTorrents:
         submit = self.webdriver.find_element(By.CSS_SELECTOR, "input[type='submit'][value='X']")
         submit.click()
 
-        print("[ABTorrents] submitted form, waiting for url to change...")
+        print("[ABTorrents] submitted login form, waiting for url to change...")
 
         try:
             self.wait.until(
@@ -201,6 +198,7 @@ class ABTorrents:
                 EC.presence_of_element_located((By.CSS_SELECTOR, "a[href*='logout.php']"))
             )
             logoutLink.click()
+            print("[ABTorrents] logout successful")
         except (NoSuchElementException, TimeoutException) as e:
             print("[ABTorrents] logout failed: {e}")
 
