@@ -31,8 +31,26 @@ docker build -t captmicr0/abtorrents-proxy:latest .
 ```
 
 ## Docker container usage
+
+Command line:
 ```
 docker run ghcr.io/captmicr0/abtorrents-proxy:latest
+```
+
+Docker-Compose:
+```
+version: "3.7"
+services:
+  ###--- ABTORRENTS-PROXY ---------------------------------------------------###
+  abtorrents-proxy:
+    image: ghcr.io/captmicr0/abtorrents-proxy:latest
+    container_name: abtorrents-proxy
+    volumes:
+      # TIMEZONE
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+     - 8080:8080
+    restart: always
 ```
 
 The proxy server and ABTProwlarrHandler server will start.
