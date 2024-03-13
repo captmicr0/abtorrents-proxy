@@ -1,5 +1,8 @@
-import os, sys, tempfile
-import pprint
+import os, sys, tempfile, pprint
+import signal, threading, time
+from functools import partial
+
+os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 
 #import undetected_chromedriver as driver
 from selenium import webdriver as driver
@@ -10,46 +13,105 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 import pickle
 import cv2
 
+def browserCloseTimeout(abt):
+    # Check if the browser had any activity for the last
+    # closeTimeout period, and if not close the browser
+    while abt.timeoutThreadRunning:
+        if ((time.time() - abt.lastCheckedOpen) > abt.closeTimeout):
+            if abt.checkBrowserOpen():
+                abt.closeBrowser()
+                print("[***] closeTimeout reached, closing browser!")
+        time.sleep(0.01)
+
 class ABTorrents:
-    def __init__(self, webdrv, baseUrl, cookieFile, captchaTemplateDir):
+    def __init__(self, baseUrl, cookieFile, captchaTemplateDir, closeTimeout=5*60):
         # Save for later
         self.cookieFile = cookieFile
         self.baseUrl = baseUrl
 
-        # Captcha Templates
-        self.captchaTemplates = [os.path.join(captchaTemplateDir,img) for img in os.listdir(captchaTemplateDir)]
+        self.closeTimeout = closeTimeout
+        self.lastCheckedOpen = 0
+        self.timeoutThreadRunning = True
+        self.timeoutThread = threading.Thread(target=browserCloseTimeout, args=(self,))
+        self.timeoutThread.start()
+
+        self.prepareCaptchaTemplates(captchaTemplateDir)
 
         # Configure chrome options
-        self.chrome_options = webdrv.ChromeOptions()
+        self.chrome_options = driver.ChromeOptions()
         self.chrome_options.add_argument('--no-sandbox')
         self.chrome_options.add_argument('--headless')
         self.chrome_options.add_argument('--disable-gpu')
         self.chrome_options.add_argument('--single-process')
         self.chrome_options.add_argument('--no-zygote')
+        self.chrome_options.add_argument("--window-size=1280,720")
+
         self.chrome_options.add_argument('--disable-dev-shm-usage')
-        self.chrome_options.add_argument("--window-size=1920,1080")
+        self.chrome_options.add_argument("--disable-crash-reporter")
+        self.chrome_options.add_argument("--disable-extensions")
+        self.chrome_options.add_argument("--disable-renderer-backgrounding")
+        self.chrome_options.add_argument("--disable-background-timer-throttling")
+        self.chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+        self.chrome_options.add_argument("--disable-client-side-phishing-detection")
+        self.chrome_options.add_argument("--disable-crash-reporter")
+        self.chrome_options.add_argument("--disable-oopr-debug-crash-dump")
+        self.chrome_options.add_argument("--no-crash-upload")
+        self.chrome_options.add_argument("--silent")
         self.chrome_options.add_argument('log-level=3')
 
+    def openBrowser(self):
         # Open browser
-        self.webdriver = webdrv.Chrome(options=self.chrome_options)
-
-        # Load cookies
-        self.loadCookies()
+        self.webdriver = driver.Chrome(options=self.chrome_options)
 
         # Setup wait for later
         self.wait = WebDriverWait(self.webdriver, 10)
 
-        # Open ABTorrents
-        self.webdriver.get(self.baseUrl)
+        # Load cookies
+        self.loadCookies()
+    
+    def checkBrowserOpen(self):
+        try:
+            # This will raise an exception if browser is not open
+            temp = self.webdriver.window_handles
+            return True
+        except:
+            return False
+
+    def ensureBrowserOpen(self):
+        print("[***] ABTorrents.ensureBrowserOpen()")
+        # Make sure browser is open
+        try:
+            # This will raise an exception if browser is not open
+            temp = self.webdriver.window_handles
+            print("[***] already open!")
+        except:
+            self.openBrowser()
+            print("[***] new browser opened!")
+        finally:
+            # Save the time for close timeout
+            self.lastCheckedOpen = time.time()
+    
+    def closeBrowser(self):
+        # Exit browser
+        try:
+            self.webdriver.quit()
+        except:
+            # Already closed
+            pass
+        print("[***] ABTorrents.closeBrowser()")
+    
+    def shutdown(self):
+        self.timeoutThreadRunning = False
+        self.closeBrowser()
     
     def saveCookies(self):
-        print("[ABTorrents] saving cookies in " + self.cookieFile)
+        print("[BrowserInterface.saveCookies] saving cookies in " + self.cookieFile)
         pickle.dump(self.webdriver.get_cookies() , open(self.cookieFile,"wb"))
         pprint.pp(self.webdriver.get_cookies())
 
     def loadCookies(self):
         if os.path.exists(self.cookieFile) and os.path.isfile(self.cookieFile):
-            print("[ABTorrents] loading cookies from " + self.cookieFile)
+            print("[BrowserInterface.loadCookies] loading cookies from " + self.cookieFile)
             cookies = pickle.load(open(self.cookieFile, "rb"))
 
             # Enables network tracking so we may use Network.setCookie method
@@ -72,8 +134,41 @@ class ABTorrents:
             self.webdriver.execute_cdp_cmd('Network.disable', {})
             return 1
 
-        print("[ABTorrents] cookie file " + self.cookieFile + " does not exist.")
+        print("[BrowserInterface.loadCookies] cookie file " + self.cookieFile + " does not exist.")
         return 0
+
+    def prepareCaptchaTemplates(self, captchaTemplateDir):
+        # Prepare template matching for each template image
+        self.captchaTemplates = {}
+
+        try:
+            # Get a list of template paths
+            self.captchaTemplateImages = [os.path.join(captchaTemplateDir,img) for img in os.listdir(captchaTemplateDir)]
+            
+            for templatePath in self.captchaTemplateImages:
+                # Read image
+                template = cv2.imread(templatePath, cv2.IMREAD_UNCHANGED)
+
+                # Split the template into image and alpha components
+                templateImg = template[:, :, :3]
+                templateAlpha = template[:, :, 3]  # Alpha channel without normalization
+
+                # Ensure the alpha channel has the correct depth
+                templateAlpha = cv2.cvtColor(templateAlpha, cv2.COLOR_GRAY2BGR)
+
+                # Extract icon name from path
+                iconFn = os.path.split(templatePath)[1]
+                iconName = os.path.splitext(iconFn)[0]
+
+                # Add to dictionary
+                self.captchaTemplates[iconName.lower()] = {
+                    'img': templateImg,
+                    'alpha': templateAlpha
+                }
+        except Exception as e:
+            print(f"[ABTorrents.prepareCaptchaTemplates] error {e}")
+        
+        print(f"[ABTorrents.prepareCaptchaTemplates] {self.captchaTemplates.keys()}")
 
     def findMatchingIcon(self, inputImagePath, threshold=0.8):
         # Read the input image
@@ -83,25 +178,21 @@ class ABTorrents:
         bestMatchValue = 0
         bestMatchTemplate = None
 
-        # Perform template matching for each template image
-        for templatePath in self.captchaTemplates:
-            template = cv2.imread(templatePath, cv2.IMREAD_UNCHANGED)
-
-            # Split the template into image and alpha components
-            templateImg = template[:, :, :3]
-            templateAlpha = template[:, :, 3]  # Alpha channel without normalization
-
-            # Ensure the alpha channel has the correct depth
-            templateAlpha = cv2.cvtColor(templateAlpha, cv2.COLOR_GRAY2BGR)
-
+        # Perform matching for each template
+        for template in self.captchaTemplates:
+            print(f"[***] performing matching for {template}")
             # Perform matching considering alpha values
-            result = cv2.matchTemplate(inputImage[:, :, :3], templateImg, cv2.TM_CCOEFF_NORMED, mask=templateAlpha)
+            result = cv2.matchTemplate(inputImage[:, :, :3],
+                                       self.captchaTemplates[template]['img'],
+                                       cv2.TM_CCOEFF_NORMED,
+                                       mask=self.captchaTemplates[template]['alpha'])
             _, max_val, _, _ = cv2.minMaxLoc(result)
+            print(f"       max_val {max_val}")
 
             # Check if the current template is a better match
             if max_val > bestMatchValue:
                 bestMatchValue = max_val
-                bestMatchTemplate = templatePath
+                bestMatchTemplate = template
 
         # Check if the best match exceeds the threshold
         if bestMatchValue >= threshold:
@@ -110,14 +201,16 @@ class ABTorrents:
         raise Exception("No match found!")
     
     def doLogin(self, username, password):
+        self.ensureBrowserOpen()
+
         # Go to login page
         self.webdriver.get(urljoin(self.baseUrl, "/login.php"))
         
         # Make sure it actually the login page and not redirected to homepage
-        if not "login.php" in self.webdriver.current_url:
-            print("[ABTorrents] still not on login page")
+        if "login.php" not in self.webdriver.current_url:
+            print("[ABTorrents.doLogin] still not on login page")
             if self.webdriver.current_url.endswith("index.php"):
-                print("[ABTorrents] redirected to index.php, must be logged in already")
+                print("[ABTorrents.doLogin] on index.php, must be logged in already")
                 self.checkPMs()
                 return 1
             return 0
@@ -128,29 +221,27 @@ class ABTorrents:
                 EC.presence_of_element_located((By.CLASS_NAME, "captchaImage"))
             )
         except:
-            print("[ABTorrents] no captchaImage elements found")
+            print("[ABTorrents.doLogin] no captchaImage elements found")
             return 0
 
         # Create temp directory for saving captcha images
+        captchaMatches = []
         captchaTempDir = tempfile.mkdtemp()
-        
+
         # Save captcha images in order and match to templates
         captchaImages = self.webdriver.find_elements(By.CLASS_NAME, "captchaImage")
-        captchaMatches = []
         for img in captchaImages:
             imgFn = os.path.join(captchaTempDir, "captchaImage-%d.png" % captchaImages.index(img))
             img.screenshot(imgFn)
             try:
                 matchingIcon = self.findMatchingIcon(imgFn) 
-                matchingIconFn = os.path.split(matchingIcon)[1]
-                matchingIconName = os.path.splitext(matchingIconFn)[0]
-                captchaMatches.append(matchingIconName)
+                captchaMatches.append(matchingIcon)
             except Exception as err:
-                print("[ABTorrents] error matching image (%s)" % imgFn, err)
+                print("[ABTorrents.doLogin] error matching image (%s)" % imgFn, err)
                 return 0
 
         # Get which icon we need to click on
-        captchaText = self.webdriver.find_element(By.CLASS_NAME, "captchaText").text
+        captchaText = self.webdriver.find_element(By.CLASS_NAME, "captchaText").text.lower()
         captchaToClick = captchaImages[captchaMatches.index(captchaText)]
 
         # Enter username and password
@@ -171,17 +262,17 @@ class ABTorrents:
         submit = self.webdriver.find_element(By.CSS_SELECTOR, "input[type='submit'][value='X']")
         submit.click()
 
-        print("[ABTorrents] submitted login form, waiting for url to change...")
+        print("[ABTorrents.doLogin] submitted login form, waiting for url to change...")
 
         try:
             self.wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "a[href*='logout.php']"))
             )
         except (NoSuchElementException, TimeoutException) as e:
-            print(f"[ABTorrents] login failed: {e}")
+            print(f"[ABTorrents.doLogin] login failed: {e}")
             return 0
 
-        print("[ABTorrents] login successful")
+        print("[ABTorrents.doLogin] login successful")
         
         # Save cookies
         self.saveCookies()
@@ -192,17 +283,24 @@ class ABTorrents:
         return 1
     
     def doLogout(self):
+        self.ensureBrowserOpen()
+
+        # Go to index page
+        self.webdriver.get(urljoin(self.baseUrl, "/index.php"))
+
         try:
             # Wait for logout button to exist and click it
             logoutLink = self.wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "a[href*='logout.php']"))
             )
             logoutLink.click()
-            print("[ABTorrents] logout successful")
+            print("[ABTorrents.doLogout] logout successful")
         except (NoSuchElementException, TimeoutException) as e:
-            print("[ABTorrents] logout failed: {e}")
+            print("[ABTorrents.doLogout] logout failed: {e}")
 
     def getPageSource(self, path):
+        self.ensureBrowserOpen()
+
         # Create return variables
         repsonseHTML = "Error fetching page source"
         responseCode = 500
@@ -210,12 +308,12 @@ class ABTorrents:
         # Do nothing if on the login page
         if "login.php" in self.webdriver.current_url:
             responseHTML="redirected to login.php, you need to login first"
-            print(f"[ABTorrents] {responseHTML}")
+            print(f"[ABTorrents.getPageSource] {responseHTML}")
             return responseCode, responseHTML
 
         # Join the baseUrl and requested path 
         reqUrl = urljoin(self.baseUrl, path)
-        print("[ABTorrents] getting page source for: %s" % reqUrl)
+        print("[ABTorrents.getPageSource] getting page source for: %s" % reqUrl)
 
         # Open a new tab
         numWindowsBefore = len(self.webdriver.window_handles)
@@ -249,10 +347,14 @@ class ABTorrents:
         return responseCode, responseHTML
 
     def checkPMs(self):
+        self.ensureBrowserOpen()
+
         # Save current URL
         preCheckUrl = self.webdriver.current_url
 
-        if "login" in preCheckUrl: return 0
+        if "login.php" in self.webdriver.current_url:
+            print(f"[ABTorrents.checkPMs] redirected to login.php, you need to login first")
+            return 0
 
         # Check if PMs need read
         try:
@@ -271,7 +373,9 @@ class ABTorrents:
         return 0
 
     def readPMs(self):
-        print("[ABTorrents] reading unread PMs")
+        self.ensureBrowserOpen()
+
+        print("[ABTorrents.readPMs] reading unread PMs")
         try:
             self.webdriver.get(urljoin(self.baseUrl, "/pm_system.php"))
 
@@ -293,7 +397,7 @@ class ABTorrents:
                 status = ("pn_inboxnew" in msgStatusPictures[idx].get_attribute("src")) and "new" or "old"
                 if status == "new":
                     link = viewMessageLinks[idx]
-                    print("[ABTorrents] reading new message: %s" % link.text)
+                    print("[ABTorrents.readPMs] reading new message: %s" % link.text)
                     linkURL = link.get_attribute("href")
                     # Open new tab and switch to it
                     numWindowsBefore = len(self.webdriver.window_handles)
@@ -307,16 +411,12 @@ class ABTorrents:
                     try:
                         self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[value*='delete']")))
                     except:
-                        print("[ABTorrents] delete button not found")
+                        print("[ABTorrents.readPMs] delete button not found")
                     # Close tab and switch to original window
                     self.webdriver.close()
                     self.webdriver.switch_to.window(windowBefore)
         except Exception as err:
-            print("[ABTorrents] error reading PMs", err)
-
-    def quit(self, exitCode=0):
-        # Exit browser
-        self.webdriver.quit()
+            print("[ABTorrents.readPMs] error reading PMs", err)
 
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -346,7 +446,7 @@ class ABTProwlarrHandler(BaseHTTPRequestHandler):
                 response  = "<html><head><title>abtorrents-proxy</title></head><body>"
                 if "doLogin.py?" not in self.path:
                     print(f"[ABTProwlarrHandler] requesting login form: {self.path}")
-                    response += "<form action='/doLogin.py' method='post'>"
+                    response += "<form action='/doLogin.py' method='get'>"
                     response += "<label for='username'>Username:</label>"
                     response += "<input type='text' id='username' name='username' placeholder='username'/>"
                     response += "<label for='password'>Password:</label>"
@@ -515,9 +615,6 @@ class OverwriteProxyHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_error(500, f'[OverwriteProxyHandler] Internal Server Error: {str(e)}')
 
-import signal, threading
-from functools import partial
-
 def signalHandler(args, signum=99999, frame=None):
     abt, abtProxyHandlerServer, overwriteProxyServer = args
     print(f"[*] received signal {signum}. shutting down.")
@@ -526,7 +623,8 @@ def signalHandler(args, signum=99999, frame=None):
     print("[*] shutting down abtProwlarrServer")
     abtProxyHandlerServer.shutdown()
     print("[*] shutting down abt")
-    abt.quit()
+    abt.shutdown()
+    return True
 
 def runServer(server):
     server.serve_forever()
@@ -539,7 +637,7 @@ if __name__ == "__main__":
     proxyPort = "ABT_PROXYPORT" in os.environ.keys() and int(os.environ["ABT_PROXYPORT"]) or 8080
 
     # Setup ABTorrents instance
-    abt = ABTorrents(driver, baseurl, './cookies.json', './captchaImages')
+    abt = ABTorrents(baseurl, './cookies.json', './captchaImages')
     
     # Login if ABT_USERNAME and ABT_PASSWORD exist in environment variables
     if ("ABT_USERNAME" in os.environ.keys()) and ("ABT_PASSWORD" in os.environ.keys()):
@@ -580,5 +678,6 @@ if __name__ == "__main__":
     # Wait for the server thread to finish
     abtProwlarrThread.join()
     overwriteProxyThread.join()
+    abt.timeoutThread.join()
 
     print("[*] ABTorrents-proxy exiting...")
