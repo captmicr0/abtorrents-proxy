@@ -20,7 +20,6 @@ def browserCloseTimeout(abt):
         if ((time.time() - abt.lastCheckedOpen) > abt.closeTimeout):
             if abt.checkBrowserOpen():
                 abt.closeBrowser()
-                print("[***] closeTimeout reached, closing browser!")
         time.sleep(0.01)
 
 class ABTorrents:
@@ -78,15 +77,12 @@ class ABTorrents:
             return False
 
     def ensureBrowserOpen(self):
-        print("[***] ABTorrents.ensureBrowserOpen()")
         # Make sure browser is open
         try:
             # This will raise an exception if browser is not open
             temp = self.webdriver.window_handles
-            print("[***] already open!")
         except:
             self.openBrowser()
-            print("[***] new browser opened!")
         finally:
             # Save the time for close timeout
             self.lastCheckedOpen = time.time()
@@ -98,7 +94,6 @@ class ABTorrents:
         except:
             # Already closed
             pass
-        print("[***] ABTorrents.closeBrowser()")
     
     def shutdown(self):
         self.timeoutThreadRunning = False
