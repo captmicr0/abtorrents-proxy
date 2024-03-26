@@ -65,6 +65,15 @@ class ABTorrents:
         # Setup wait for later
         self.wait = WebDriverWait(self.webdriver, 10)
 
+        # Wait for it to open
+        self.webdriver.get(self.baseUrl)
+        self.wait.until(EC.number_of_windows_to_be(1))
+        
+        # Wait for body tag again
+        self.wait.until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+
         # Load cookies
         self.loadCookies()
     
@@ -81,7 +90,7 @@ class ABTorrents:
         try:
             # This will raise an exception if browser is not open
             temp = self.webdriver.window_handles
-        except:
+        except Exception as e:
             self.openBrowser()
         finally:
             # Save the time for close timeout
@@ -90,7 +99,7 @@ class ABTorrents:
     def closeBrowser(self):
         # Exit browser
         try:
-            self.webdriver.quit()
+            if self.checkBrowserOpen(): self.webdriver.quit()
         except:
             # Already closed
             pass
@@ -100,11 +109,15 @@ class ABTorrents:
         self.closeBrowser()
     
     def saveCookies(self):
+        if not self.checkBrowserOpen(): return
+
         print("[BrowserInterface.saveCookies] saving cookies in " + self.cookieFile)
         pickle.dump(self.webdriver.get_cookies() , open(self.cookieFile,"wb"))
         pprint.pp(self.webdriver.get_cookies())
 
     def loadCookies(self):
+        if not self.checkBrowserOpen(): return
+        
         if os.path.exists(self.cookieFile) and os.path.isfile(self.cookieFile):
             print("[BrowserInterface.loadCookies] loading cookies from " + self.cookieFile)
             cookies = pickle.load(open(self.cookieFile, "rb"))
@@ -118,9 +131,6 @@ class ABTorrents:
                 if 'expiry' in cookie:
                     cookie['expires'] = cookie['expiry']
                     del cookie['expiry']
-
-                # Replace domain 'apple.com' with 'microsoft.com' cookies
-                cookie['domain'] = cookie['domain'].replace('apple.com', 'microsoft.com')
 
                 # Set the actual cookie
                 self.webdriver.execute_cdp_cmd('Network.setCookie', cookie)
