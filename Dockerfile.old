@@ -1,11 +1,12 @@
-FROM ubuntu:22.04
+FROM python:3.11-alpine
 
-ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y \
-  python3 python3-pip \
-  chromium chromium-chromedriver \
-  xvfb \
-  && rm -rf /var/lib/apt/lists/*
+# Update apk repo
+RUN echo "http://dl-4.alpinelinux.org/alpine/v3.14/main" >> /etc/apk/repositories && \
+    echo "http://dl-4.alpinelinux.org/alpine/v3.14/community" >> /etc/apk/repositories
+
+# Install chromedriver
+RUN apk update
+RUN apk add bash chromium chromium-chromedriver
 
 # Upgrade pip
 RUN pip install --upgrade pip

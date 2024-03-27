@@ -52,11 +52,11 @@ class ABTorrents:
         self.chrome_options.add_argument("--disable-background-timer-throttling")
         self.chrome_options.add_argument("--disable-backgrounding-occluded-windows")
         self.chrome_options.add_argument("--disable-client-side-phishing-detection")
-        #self.chrome_options.add_argument("--disable-crash-reporter")
+        self.chrome_options.add_argument("--disable-crash-reporter")
         self.chrome_options.add_argument("--disable-oopr-debug-crash-dump")
         self.chrome_options.add_argument("--no-crash-upload")
-        #self.chrome_options.add_argument("--silent")
-        #self.chrome_options.add_argument('log-level=3')
+        self.chrome_options.add_argument("--silent")
+        self.chrome_options.add_argument('log-level=3')
 
     def openBrowser(self):
         print("[*] openBrowser")
