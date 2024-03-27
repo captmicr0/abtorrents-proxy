@@ -269,7 +269,6 @@ class ABTorrents:
         submit = self.webdriver.find_element(By.CSS_SELECTOR, "input[type='submit'][value='X']")
         submit.click()
         
-        
         print("[ABTorrents.doLogin] submitted login form, waiting for url to change...") #logout link to appear...")
 
         
@@ -663,6 +662,7 @@ if __name__ == "__main__":
     overwriteProxyAddr = ('', proxyPort)
     overwrites = {
         'abtorrents.me': abtProwlarrAddr,
+        '.': abtProwlarrAddr,
     }
     print("[*] overwriteProxyServer init [ %s:%d ]" % overwriteProxyAddr)
     overwriteProxyServer = ThreadingHTTPServer(overwriteProxyAddr, partial(OverwriteProxyHandler, overwrites))
