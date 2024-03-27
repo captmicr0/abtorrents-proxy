@@ -64,8 +64,7 @@ class ABTorrents:
     def openBrowser(self):
         print("[*] openBrowser")
         # Open browser
-        self.webdriver = driver.Chrome(options=self.chrome_options,
-                                       service=ChromiumService(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()))
+        self.webdriver = driver.Chrome(options=self.chrome_options)
         self.webdriver.command_executor.set_timeout(10)
         print(f"[*] self.webdriver = {self.webdriver}")
 
