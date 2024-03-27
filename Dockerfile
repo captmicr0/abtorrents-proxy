@@ -6,8 +6,7 @@ RUN echo "http://dl-4.alpinelinux.org/alpine/v3.14/main" >> /etc/apk/repositorie
 
 # Install chromedriver
 RUN apk update
-RUN apk add bash chromium
-#RUN apk add bash chromium chromium-chromedriver
+RUN apk add bash chromium chromium-chromedriver
 
 # Upgrade pip
 RUN pip install --upgrade pip

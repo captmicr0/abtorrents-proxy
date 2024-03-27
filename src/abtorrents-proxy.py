@@ -106,7 +106,7 @@ class ABTorrents:
         try:
             # This will raise an exception if browser is not open
             temp = self.webdriver.current_url
-        except:
+        except AttributeError:
             print("[*] self.openBrowser()")
             self.openBrowser()
         finally:
