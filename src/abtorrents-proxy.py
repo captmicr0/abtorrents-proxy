@@ -191,7 +191,6 @@ class ABTorrents:
                                        cv2.TM_CCOEFF_NORMED,
                                        mask=self.captchaTemplates[template]['alpha'])
             _, max_val, _, _ = cv2.minMaxLoc(result)
-            print(f"[***] performed matching for {template} max_val {max_val}")
 
             # Check if the current template is a better match
             if max_val > bestMatchValue:
@@ -261,7 +260,7 @@ class ABTorrents:
         if not remember.is_selected(): remember.click()
 
         # Click the correct captcha icon
-        print("[ABTorrents.doLogin] clicking captcha icon...")
+        print(f"[ABTorrents.doLogin] clicking captcha icon {captchaText}...")
         captchaToClick.click()
 
         # Find the X and click to login
@@ -269,14 +268,18 @@ class ABTorrents:
         currURL = self.webdriver.current_url
         submit = self.webdriver.find_element(By.CSS_SELECTOR, "input[type='submit'][value='X']")
         submit.click()
+        
+        
+        print("[ABTorrents.doLogin] submitted login form, waiting for url to change...") #logout link to appear...")
 
-        print("[ABTorrents.doLogin] submitted login form, waiting for url to change...")
-
+        
         try:
-            self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "a[href*='logout.php']"))
-            )
-        except (NoSuchElementException, TimeoutException) as e:
+            print(f"[ABTorrents.doLogin] current_url: {self.webdriver.current_url}")
+            #self.wait.until(
+            #    EC.presence_of_element_located((By.CSS_SELECTOR, "a[href*='logout.php']"))
+            #)
+            WebDriverWait(self.webdriver, 5).until(EC.url_changes(currURL))
+        except Exception as e:
             print(f"[ABTorrents.doLogin] login failed: {e}")
             return 0
 
