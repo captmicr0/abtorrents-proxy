@@ -24,7 +24,7 @@ COPY package.json ../
 
 EXPOSE 8080
 
-ENTRYPOINT ["python", "-u", "./abtorrents-proxy.py"]
+ENTRYPOINT ["python3", "-u", "./abtorrents-proxy.py"]
 
 LABEL org.opencontainers.image.source=https://github.com/captmicr0/abtorrents-proxy
 
