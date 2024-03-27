@@ -70,9 +70,9 @@ class ABTorrents:
         self.wait.until(EC.number_of_windows_to_be(1))
         
         # Wait for body tag again
-        self.wait.until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
-        )
+        #self.wait.until(
+        #    EC.presence_of_element_located((By.TAG_NAME, "body"))
+        #)
 
         # Load cookies
         self.loadCookies()
@@ -185,14 +185,13 @@ class ABTorrents:
 
         # Perform matching for each template
         for template in self.captchaTemplates:
-            print(f"[***] performing matching for {template}")
             # Perform matching considering alpha values
             result = cv2.matchTemplate(inputImage[:, :, :3],
                                        self.captchaTemplates[template]['img'],
                                        cv2.TM_CCOEFF_NORMED,
                                        mask=self.captchaTemplates[template]['alpha'])
             _, max_val, _, _ = cv2.minMaxLoc(result)
-            print(f"       max_val {max_val}")
+            print(f"[***] performed matching for {template} max_val {max_val}")
 
             # Check if the current template is a better match
             if max_val > bestMatchValue:
@@ -250,19 +249,23 @@ class ABTorrents:
         captchaToClick = captchaImages[captchaMatches.index(captchaText)]
 
         # Enter username and password
+        print("[ABTorrents.doLogin] enering username and password...")
         usernameBox = self.webdriver.find_element(By.NAME, "username")
         passwordBox = self.webdriver.find_element(By.NAME, "password")
         usernameBox.send_keys(username)
         passwordBox.send_keys(password)
 
         # Check the "Remember Me?" checkbox
+        print("[ABTorrents.doLogin] checking 'Remember Me?'...")
         remember = self.webdriver.find_element(By.NAME, "remember")
         if not remember.is_selected(): remember.click()
 
         # Click the correct captcha icon
+        print("[ABTorrents.doLogin] clicking captcha icon...")
         captchaToClick.click()
 
         # Find the X and click to login
+        print("[ABTorrents.doLogin] finding X and clicking...")
         currURL = self.webdriver.current_url
         submit = self.webdriver.find_element(By.CSS_SELECTOR, "input[type='submit'][value='X']")
         submit.click()
