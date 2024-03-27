@@ -274,10 +274,15 @@ class ABTorrents:
         captchaToClick.click()
 
         # Find the X and click to login
-        print("[ABTorrents.doLogin] finding X and clicking...")
+        print("[ABTorrents.doLogin] finding X...")
         currURL = self.webdriver.current_url
         submit = self.webdriver.find_element(By.CSS_SELECTOR, "input[type='submit'][value='X']")
-        submit.click()
+        print(f"[ABTorrents.doLogin] {submit}")
+        time.sleep(2)
+        print("[ABTorrents.doLogin] clicking X...")
+        self.webdriver.execute_script("document.querySelector(\"input[type='submit'][value='X']\").form.submit();");
+        time.sleep(5)
+        #submit.click()
         
         print("[ABTorrents.doLogin] submitted login form, logout link to appear...")
 
