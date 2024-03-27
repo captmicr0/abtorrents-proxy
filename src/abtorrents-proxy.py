@@ -280,9 +280,9 @@ class ABTorrents:
         print(f"[ABTorrents.doLogin] {submit}")
         time.sleep(2)
         print("[ABTorrents.doLogin] clicking X...")
-        self.webdriver.execute_script("document.querySelector(\"input[type='submit'][value='X']\").form.submit();");
+        self.webdriver.execute_script("document.querySelector(\"input[type='submit'][value='X']\").click();");
         time.sleep(5)
-        #submit.click()
+        #submit.submit()
         
         print("[ABTorrents.doLogin] submitted login form, logout link to appear...")
 
