@@ -19,6 +19,7 @@ def browserCloseTimeout(abt):
     while abt.timeoutThreadRunning:
         if ((time.time() - abt.lastCheckedOpen) > abt.closeTimeout):
             if abt.checkBrowserOpen():
+                print("[browserCloseTimeout] closing browser")
                 abt.closeBrowser()
         time.sleep(0.01)
 
@@ -29,7 +30,7 @@ class ABTorrents:
         self.baseUrl = baseUrl
 
         self.closeTimeout = closeTimeout
-        self.lastCheckedOpen = 0
+        self.lastCheckedOpen = time.time()
         self.timeoutThreadRunning = True
         self.timeoutThread = threading.Thread(target=browserCloseTimeout, args=(self,))
         self.timeoutThread.start()
@@ -39,7 +40,7 @@ class ABTorrents:
         # Configure chrome options
         self.chrome_options = driver.ChromeOptions()
         self.chrome_options.add_argument('--no-sandbox')
-        self.chrome_options.add_argument('--headless')
+        self.chrome_options.add_argument('--headless=new')
         self.chrome_options.add_argument('--disable-gpu')
         self.chrome_options.add_argument('--single-process')
         self.chrome_options.add_argument('--no-zygote')
@@ -67,7 +68,7 @@ class ABTorrents:
 
         # Wait for it to open
         self.webdriver.get(self.baseUrl)
-        self.wait.until(EC.number_of_windows_to_be(1))
+        #self.wait.until(EC.number_of_windows_to_be(1))
         
         # Wait for body tag again
         #self.wait.until(
@@ -76,11 +77,16 @@ class ABTorrents:
 
         # Load cookies
         self.loadCookies()
+        
+        # Save the time for close timeout
+        self.lastCheckedOpen = time.time()
     
     def checkBrowserOpen(self):
         try:
             # This will raise an exception if browser is not open
             temp = self.webdriver.window_handles
+            # Save the time for close timeout
+            self.lastCheckedOpen = time.time()
             return True
         except:
             return False
@@ -111,7 +117,7 @@ class ABTorrents:
     def saveCookies(self):
         if not self.checkBrowserOpen(): return
 
-        print("[BrowserInterface.saveCookies] saving cookies in " + self.cookieFile)
+        print("[ABTorrents.saveCookies] saving cookies in " + self.cookieFile)
         pickle.dump(self.webdriver.get_cookies() , open(self.cookieFile,"wb"))
         pprint.pp(self.webdriver.get_cookies())
 
@@ -119,7 +125,7 @@ class ABTorrents:
         if not self.checkBrowserOpen(): return
         
         if os.path.exists(self.cookieFile) and os.path.isfile(self.cookieFile):
-            print("[BrowserInterface.loadCookies] loading cookies from " + self.cookieFile)
+            print("[ABTorrents.loadCookies] loading cookies from " + self.cookieFile)
             cookies = pickle.load(open(self.cookieFile, "rb"))
 
             # Enables network tracking so we may use Network.setCookie method
@@ -139,7 +145,7 @@ class ABTorrents:
             self.webdriver.execute_cdp_cmd('Network.disable', {})
             return 1
 
-        print("[BrowserInterface.loadCookies] cookie file " + self.cookieFile + " does not exist.")
+        print("[ABTorrents.loadCookies] cookie file " + self.cookieFile + " does not exist.")
         return 0
 
     def prepareCaptchaTemplates(self, captchaTemplateDir):
@@ -204,21 +210,25 @@ class ABTorrents:
         raise Exception("No match found!")
     
     def doLogin(self, username, password):
+        print("[ABTorrents.doLogin]")
         self.ensureBrowserOpen()
 
         # Go to login page
+        print("[ABTorrents.doLogin] go to login page")
         self.webdriver.get(urljoin(self.baseUrl, "/login.php"))
         
         # Make sure it actually the login page and not redirected to homepage
+        print("[ABTorrents.doLogin] check if on login page")
         if "login.php" not in self.webdriver.current_url:
             print("[ABTorrents.doLogin] still not on login page")
-            if self.webdriver.current_url.endswith("index.php"):
+            if "index.php" in self.webdriver.current_url:
                 print("[ABTorrents.doLogin] on index.php, must be logged in already")
                 self.checkPMs()
                 return 1
             return 0
         
         # Wait for captcha images to load
+        print("[ABTorrents.doLogin] waiting for captcha images to load...")
         try:
             self.wait.until(
                 EC.presence_of_element_located((By.CLASS_NAME, "captchaImage"))
@@ -269,15 +279,15 @@ class ABTorrents:
         submit = self.webdriver.find_element(By.CSS_SELECTOR, "input[type='submit'][value='X']")
         submit.click()
         
-        print("[ABTorrents.doLogin] submitted login form, waiting for url to change...") #logout link to appear...")
+        print("[ABTorrents.doLogin] submitted login form, logout link to appear...")
 
         
         try:
-            print(f"[ABTorrents.doLogin] current_url: {self.webdriver.current_url}")
-            #self.wait.until(
-            #    EC.presence_of_element_located((By.CSS_SELECTOR, "a[href*='logout.php']"))
-            #)
-            WebDriverWait(self.webdriver, 5).until(EC.url_changes(currURL))
+            #print(f"[ABTorrents.doLogin] current_url: {self.webdriver.current_url}")
+            self.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "a[href*='logout.php']"))
+            )
+            #WebDriverWait(self.webdriver, 5).until(EC.url_changes(currURL))
         except Exception as e:
             print(f"[ABTorrents.doLogin] login failed: {e}")
             return 0
@@ -475,11 +485,9 @@ class ABTProwlarrHandler(BaseHTTPRequestHandler):
                                 response += "<span id='login_success'>login success</span>"
                             else:
                                 response += "<span id='login_failed'>login failed</span>"
-                        else:
-                            # Raise exception if content_length is 0
-                            raise Exception
-                    except:
-                        response += "<span id='login_failed'>login exception</span>"
+                    except Exception as e:
+                        response += f"<span id='login_failed'>login exception {e}</span>"
+                        print(f"[ABTProwlarrHandler] login exception: {e}")
                 # Send response
                 response += "</body></html>"
                 self.send_response(200)
@@ -600,6 +608,8 @@ class OverwriteProxyHandler(BaseHTTPRequestHandler):
             
             path = self.path[self.path.index(parts.path):]
             
+            print(f"[OverwriteProxyHandler]   webserver='{webserver}' port={port} path='{path}'")
+            
             if webserver in self.overwrites.keys():
                 # Process overwrite
                 webserver, port = self.overwrites[webserver]
@@ -620,7 +630,7 @@ class OverwriteProxyHandler(BaseHTTPRequestHandler):
 
                 self.wfile.write(target_response.read())
             else:
-                self.send_error(500, f'[OverwriteProxyHandler] not in overwrite list: {webserver}')
+                self.send_error(500, f"[OverwriteProxyHandler] not in overwrite list: '{webserver}'")
 
         except Exception as e:
             self.send_error(500, f'[OverwriteProxyHandler] Internal Server Error: {str(e)}')
@@ -662,9 +672,10 @@ if __name__ == "__main__":
     overwriteProxyAddr = ('', proxyPort)
     overwrites = {
         'abtorrents.me': abtProwlarrAddr,
-        '.': abtProwlarrAddr,
+        '': abtProwlarrAddr,
     }
     print("[*] overwriteProxyServer init [ %s:%d ]" % overwriteProxyAddr)
+    print(f"[*] overwriteProxyServer overwrites: {overwrites}")
     overwriteProxyServer = ThreadingHTTPServer(overwriteProxyAddr, partial(OverwriteProxyHandler, overwrites))
     
     # Register the signal handler for SIGTERM
