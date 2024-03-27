@@ -319,6 +319,7 @@ class ABTorrents:
         return 1
     
     def doLogout(self):
+        print("[ABTorrents.doLogout]")
         self.ensureBrowserOpen()
 
         # Go to index page
@@ -335,6 +336,7 @@ class ABTorrents:
             print("[ABTorrents.doLogout] logout failed: {e}")
 
     def getPageSource(self, path):
+        print("[ABTorrents.getPageSource]")
         self.ensureBrowserOpen()
 
         # Create return variables
