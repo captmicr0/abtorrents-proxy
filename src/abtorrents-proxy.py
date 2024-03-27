@@ -62,6 +62,7 @@ class ABTorrents:
         print("[*] openBrowser")
         # Open browser
         self.webdriver = driver.Chrome(options=self.chrome_options)
+        self.webdriver.command_executor.set_timeout(10)
         print(f"[*] self.webdriver = {self.webdriver}")
 
         # Setup wait for later
