@@ -1,5 +1,5 @@
 --extra-index-url https://alpine-wheels.github.io/index
 numpy
-
-selenium==4.18.1
-opencv-python==4.9.0.80
+webdriver-manager
+selenium
+opencv-python

@@ -6,6 +6,9 @@ os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 
 #import undetected_chromedriver as driver
 from selenium import webdriver as driver
+from selenium.webdriver.chrome.service import Service as ChromiumService
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.os_manager import ChromeType
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -61,7 +64,8 @@ class ABTorrents:
     def openBrowser(self):
         print("[*] openBrowser")
         # Open browser
-        self.webdriver = driver.Chrome(options=self.chrome_options)
+        self.webdriver = driver.Chrome(options=self.chrome_options,
+                                       service=ChromiumService(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()))
         self.webdriver.command_executor.set_timeout(10)
         print(f"[*] self.webdriver = {self.webdriver}")
 
