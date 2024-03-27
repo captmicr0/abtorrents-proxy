@@ -100,19 +100,14 @@ class ABTorrents:
         # Make sure browser is open
         print("[*] ensureBrowserOpen")
         try:
-            print("[*] try")
             # This will raise an exception if browser is not open
             temp = self.webdriver.current_url
-            print("[*] temp = self.webdriver.current_url done")
-        except Exception as e:
-            print("[*] except")
+        except:
+            print("[*] self.openBrowser()")
             self.openBrowser()
-            print("[*] self.openBrowser() done")
         finally:
-            print("[*] finally")
             # Save the time for close timeout
             self.lastCheckedOpen = time.time()
-            print("[*] self.lastCheckedOpen = time.time() done")
     
     def closeBrowser(self):
         # Exit browser
