@@ -59,14 +59,19 @@ class ABTorrents:
         #self.chrome_options.add_argument('log-level=3')
 
     def openBrowser(self):
+        print("[*] openBrowser")
         # Open browser
         self.webdriver = driver.Chrome(options=self.chrome_options)
+        print(f"[*] self.webdriver = {self.webdriver}")
 
         # Setup wait for later
         self.wait = WebDriverWait(self.webdriver, 10)
+        print(f"[*] self.wait = {self.wait}")
 
         # Wait for it to open
+        print("[*] self.webdriver.get")
         self.webdriver.get(self.baseUrl)
+        print("[*] self.webdriver.get done")
         #self.wait.until(EC.number_of_windows_to_be(1))
         
         # Wait for body tag again
@@ -75,7 +80,9 @@ class ABTorrents:
         #)
 
         # Load cookies
+        print("[*] self.loadCookies()")
         self.loadCookies()
+        print("[*] self.loadCookies() done")
         
         # Save the time for close timeout
         self.lastCheckedOpen = time.time()
@@ -90,14 +97,21 @@ class ABTorrents:
 
     def ensureBrowserOpen(self):
         # Make sure browser is open
+        print("[*] ensureBrowserOpen")
         try:
+            print("[*] try")
             # This will raise an exception if browser is not open
-            temp = self.webdriver.window_handles
+            temp = self.webdriver.current_url
+            print("[*] temp = self.webdriver.current_url done")
         except Exception as e:
+            print("[*] except")
             self.openBrowser()
+            print("[*] self.openBrowser() done")
         finally:
+            print("[*] finally")
             # Save the time for close timeout
             self.lastCheckedOpen = time.time()
+            print("[*] self.lastCheckedOpen = time.time() done")
     
     def closeBrowser(self):
         # Exit browser
