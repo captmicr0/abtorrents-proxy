@@ -47,17 +47,16 @@ class ABTorrents:
         self.chrome_options.add_argument("--window-size=1280,720")
 
         self.chrome_options.add_argument('--disable-dev-shm-usage')
-        self.chrome_options.add_argument("--disable-crash-reporter")
         self.chrome_options.add_argument("--disable-extensions")
         self.chrome_options.add_argument("--disable-renderer-backgrounding")
         self.chrome_options.add_argument("--disable-background-timer-throttling")
         self.chrome_options.add_argument("--disable-backgrounding-occluded-windows")
         self.chrome_options.add_argument("--disable-client-side-phishing-detection")
-        self.chrome_options.add_argument("--disable-crash-reporter")
+        #self.chrome_options.add_argument("--disable-crash-reporter")
         self.chrome_options.add_argument("--disable-oopr-debug-crash-dump")
         self.chrome_options.add_argument("--no-crash-upload")
-        self.chrome_options.add_argument("--silent")
-        self.chrome_options.add_argument('log-level=3')
+        #self.chrome_options.add_argument("--silent")
+        #self.chrome_options.add_argument('log-level=3')
 
     def openBrowser(self):
         # Open browser
@@ -85,8 +84,6 @@ class ABTorrents:
         try:
             # This will raise an exception if browser is not open
             temp = self.webdriver.window_handles
-            # Save the time for close timeout
-            self.lastCheckedOpen = time.time()
             return True
         except:
             return False
@@ -282,9 +279,9 @@ class ABTorrents:
         print("[ABTorrents.doLogin] clicking X...")
         self.webdriver.execute_script("document.querySelector(\"input[type='submit'][value='X']\").click();");
         time.sleep(5)
-        #submit.submit()
+        #submit.click()
         
-        print("[ABTorrents.doLogin] submitted login form, logout link to appear...")
+        print("[ABTorrents.doLogin] submitted login form, waiting for logout link to appear...")
 
         
         try:
